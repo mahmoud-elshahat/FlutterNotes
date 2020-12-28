@@ -1,16 +1,15 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:modal_bottom_sheet/modal_bottom_sheet.dart';
+import 'package:notes/models/CheckedListProvider.dart';
 import 'package:notes/models/Note.dart';
+import 'package:notes/models/NotesListProvider.dart';
 import 'package:notes/services/dbhelper.dart';
 import 'package:notes/widgets/ColorPicker.dart';
 import 'package:notes/widgets/CustomGridDelegate.dart';
 import 'package:notes/widgets/GridItem.dart';
 import 'package:notes/widgets/NotesButton.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
+import 'package:provider/provider.dart';
 import 'Search.dart';
 
 class Home extends StatefulWidget {
@@ -21,63 +20,25 @@ class Home extends StatefulWidget {
 }
 
 class HomeState extends State<Home> {
-  int currentColor;
-  double height = 1.7;
-  int numberOfItems = 2;
-
-  void _changeGrid() {
-    setState(() {
-      if (numberOfItems == 2) {
-        height = 4;
-        numberOfItems = 1;
-      } else {
-        height = 1.8;
-        numberOfItems = 2;
-      }
-    });
-  }
-
-  final dbHelper = DatabaseHelper.instance;
-  List<Note> notes= [];
-
-  void createNewNote() {
-    Navigator.of(this.context)
-        .pushNamed("/Create")
-        .then((val) => val ? _getAllNotes(false) : null);
-  }
+  var notesListModel;
+  var checkedListModel;
 
   @override
   void initState() {
     super.initState();
-    _getCurrentColor();
-    _getAllNotes(false);
-  }
 
-  void _getAllNotes(bool notNeedQuery) async {
-    if (notNeedQuery) {
-      setState(() {});
-      return;
-    }
-    final allRows = await dbHelper.queryAllRows();
-    notes = new List<Note>();
-    allRows.forEach((row) => notes.add(Note.fromMap(row)));
-    setState(() {});
-  }
-
-  int currentIndex;
-
-  void _getCurrentColor() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    setState(() {
-      currentColor = prefs.getInt('color') ?? 0xffF28B83;
-      if (currentColor == -1)
-        currentIndex = -1;
-      else
-        currentIndex = colors.indexOf(currentColor);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      checkedListModel =
+          Provider.of<CheckedListProvider>(context, listen: false);
+      //get saved notes
+      notesListModel = Provider.of<NotesListProvider>(context, listen: false);
+      notesListModel.getAllNotes();
+      //get saved settings
+      notesListModel.getSavedState();
     });
   }
 
-  void openColorsList() {
+  void openColorsList(BuildContext context) {
     showMaterialModalBottomSheet(
         backgroundColor: Color(0xFF252525),
         context: this.context,
@@ -100,43 +61,61 @@ class HomeState extends State<Home> {
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10)),
                         child: new Text("Combination"),
-                        padding: EdgeInsets.all(16),
+                        padding: EdgeInsets.only(
+                            top: 16, left: 16, bottom: 14, right: 16),
                         textColor: Colors.white,
                         color: Color(0xFF3B3B3B),
-                        onPressed: () => saveColor(-1),
+                        onPressed: () =>
+                            notesListModel.updateColor(-1, -1, context),
                       ),
                     ],
                   ),
-                  ColorPicker(
-                      onTap: (index) {
-                        setState(() {
-                          currentColor = colors[index];
-                          saveColor(currentColor);
-                        });
-                      },
-                      selectedIndex: currentIndex),
+                  Consumer<NotesListProvider>(builder: (context, model, child) {
+                    return ColorPicker(
+                        onTap: (index) {
+                          notesListModel.updateColor(
+                              colors[index], index, context);
+                        },
+                        selectedIndex: model.currentIndex);
+                  })
                 ],
               ),
             )));
   }
 
-  void saveColor(int color) async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('color', color);
-    Navigator.of(context).pop();
-    Navigator.pushNamedAndRemoveUntil(context, '/Home', (route) => false);
-  }
-
   // ignore: missing_return
   Future<bool> _onWillPop() async {
-    if (inCheckingState) {
-      setState(() {
-        inCheckingState = false;
-        checkedNotes = new List<Note>();
-      });
-    } else {
-      SystemChannels.platform.invokeMethod('SystemNavigator.pop');
-    }
+    checkedListModel.inCheckingState
+        ? checkedListModel.clear()
+        : SystemChannels.platform.invokeMethod('SystemNavigator.pop');
+  }
+
+  Widget notCheckingState() {
+    return (Row(
+      children: [
+        NotesButton(
+            callback: () => openColorsList(context),
+            icon: Icons.color_lens_outlined),
+        NotesButton(
+          callback: () => notesListModel.changeGrid(),
+          icon: Icons.format_align_center_outlined,
+        ),
+        NotesButton(callback: () => openSearch(context), icon: Icons.search),
+      ],
+    ));
+  }
+
+  Widget checkingState() {
+    return (NotesButton(
+      callback: _deleteSelectedNotes,
+      icon: Icons.delete_outline_outlined,
+    ));
+  }
+
+  void _deleteSelectedNotes() async {
+    if (checkedListModel.checkedNotes.length == 0) return;
+    checkedListModel.deleteSelected(context);
+      // Navigator.pushNamedAndRemoveUntil(context, '/Home', (route) => false);
   }
 
   @override
@@ -144,10 +123,11 @@ class HomeState extends State<Home> {
     return WillPopScope(
       onWillPop: _onWillPop,
       child: new Scaffold(
+          //0xFF3B3B3B
           floatingActionButton: FloatingActionButton(
-            backgroundColor: Color(0xFF3B3B3B),
+            backgroundColor: Color(0xFFFF9F1C),
             child: Icon(Icons.add),
-            onPressed: () => createNewNote(),
+            onPressed: () => Navigator.of(this.context).pushNamed("/Create"),
             foregroundColor: Colors.white,
             elevation: 5,
           ),
@@ -163,94 +143,73 @@ class HomeState extends State<Home> {
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
                           Padding(
-                            padding: EdgeInsets.only(left: 6),
-                            child: Text(
-                              !inCheckingState
-                                  ? "Notes"
-                                  : checkedNotes.length.toString() +
-                                      " Selected",
-                              style:
-                                  TextStyle(fontSize: 30, color: Colors.white),
-                            ),
-                          ),
+                              padding: EdgeInsets.only(left: 6),
+                              child: Consumer<CheckedListProvider>(
+                                  builder: (context, model, child) {
+                                return Text(
+                                  !model.inCheckingState
+                                      ? "Notes"
+                                      : model.checkedNotes.length.toString() +
+                                          " Selected",
+                                  style: TextStyle(
+                                      fontSize: 30, color: Colors.white),
+                                );
+                              })),
                           Spacer(),
-                          inCheckingState ? checkingState() : notCheckingState()
+                          Consumer<CheckedListProvider>(
+                              builder: (context, model, child) {
+                            return model.inCheckingState
+                                ? checkingState()
+                                : notCheckingState();
+                          })
                         ],
                       )),
-                  notes.length > 0
-                      ? Flexible(
-                          child: GridView.builder(
-                            shrinkWrap: true,
-                            itemCount: notes.length,
-                            gridDelegate:
-                                SliverGridDelegateWithFixedCrossAxisCountAndFixedHeight(
-                                    crossAxisCount: numberOfItems,
-                                    crossAxisSpacing: 10,
-                                    mainAxisSpacing: 10,
-                                    height: 190),
-                            itemBuilder: (BuildContext context, int i) {
-                              if (currentColor == -1) {
-                                return new GridItem(notes[i],
-                                    colors[i % colors.length], _getAllNotes);
-                              } else {
-                                return new GridItem(
-                                    notes[i], currentColor, _getAllNotes);
-                              }
-                            },
-                          ),
-                        )
-                      : Flexible(
+                  Consumer<NotesListProvider>(builder: (context, model, child) {
+                    if (model.list.length > 0) {
+                      return Flexible(
+                        child: GridView.builder(
+                          key: UniqueKey(),
+                          shrinkWrap: true,
+                          itemCount: model.list.length,
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCountAndFixedHeight(
+                                  crossAxisCount: notesListModel.numberOfItems,
+                                  crossAxisSpacing: 10,
+                                  mainAxisSpacing: 10,
+                                  height: 190),
+                          itemBuilder: (BuildContext context, int i) {
+                            if (notesListModel.currentColor == -1) {
+                              return new GridItem(
+                                  model.list[i], colors[i % colors.length]);
+                            } else {
+                              return new GridItem(
+                                  model.list[i], notesListModel.currentColor);
+                            }
+                          },
+                        ),
+                      );
+                    } else {
+                      return Flexible(
                           child: Center(
-                          child: Text(
-                            "No notes yet, create a one!",
-                            style: TextStyle(color: Colors.white, fontSize: 16),
-                            textAlign: TextAlign.center,
-                          ),
-                        )),
+                        child: Text(
+                          "No notes yet, create a one!",
+                          style: TextStyle(color: Colors.white, fontSize: 18),
+                          textAlign: TextAlign.center,
+                        ),
+                      ));
+                    }
+                  })
                 ],
               ))),
     );
   }
 
-  Widget notCheckingState() {
-    return (Row(
-      children: [
-        NotesButton(callback: openColorsList, icon: Icons.color_lens_outlined),
-        NotesButton(
-          callback: _changeGrid,
-          icon: Icons.format_align_center_outlined,
-        ),
-        NotesButton(
-            callback: () {
-              Navigator.of(context).push(MaterialPageRoute(
-                  builder: (context) =>
-                      Search(notes: notes, itemColor: currentColor)));
-            },
-            icon: Icons.search),
-      ],
-    ));
-  }
-
-  Widget checkingState() {
-    return (NotesButton(
-      callback: _deleteSelectedNotes,
-      icon: Icons.delete_outline_outlined,
-    ));
-  }
-
-  void _deleteSelectedNotes() async {
-    if (checkedNotes.length == 0) return;
-
-    final dbHelper = DatabaseHelper.instance;
-    int i;
-    for (i = 0; i < checkedNotes.length; i++) {
-      await dbHelper.delete(checkedNotes[i].id);
-      notes.remove(checkedNotes[i]);
+  void openSearch(BuildContext context) {
+    {
+      Navigator.of(context).push(MaterialPageRoute(
+          builder: (context) => Search(
+              notes: notesListModel.list,
+              itemColor: notesListModel.currentColor)));
     }
-
-    setState(() {
-      inCheckingState = false;
-      Navigator.pushNamedAndRemoveUntil(context, '/Home', (route) => false);
-    });
   }
 }

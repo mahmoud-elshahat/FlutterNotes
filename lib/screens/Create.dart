@@ -1,91 +1,81 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:intl/intl.dart';
 import 'package:notes/models/Note.dart';
-import 'package:notes/services/dbhelper.dart';
+import 'package:notes/models/NotesListProvider.dart';
 import 'package:notes/widgets/CustomInputText.dart';
 import 'package:notes/widgets/NotesButton.dart';
+import 'package:provider/provider.dart';
 
-class Create extends StatefulWidget {
-  @override
-  State<StatefulWidget> createState() {
-    return CreateState();
-  }
-}
+class Create extends StatelessWidget {
+  Future<bool> _onWillPop(BuildContext context) async {
+    if (noteController.text.isNotEmpty || titleController.text.isNotEmpty) {
+      return (await showDialog(
+        context: context,
+        builder: (context) => new AlertDialog(
+          title: new Text('Are you sure?'),
+          content: new Text('Do you want to discard this note'),
+          actions: <Widget>[
+            new FlatButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: new Text('No'),
+            ),
+            new FlatButton(
+              onPressed: (){
+                Navigator.of(context).pop();
+                titleController.dispose();
+                noteController.dispose();
+                Navigator.of(context).pop();
 
-class CreateState extends State<Create> {
-  Future<bool> _onWillPop() async {
-    return (await showDialog(
-          context: context,
-          builder: (context) => new AlertDialog(
-            title: new Text('Are you sure?'),
-            content: new Text('Do you want to discard this note'),
-            actions: <Widget>[
-              new FlatButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: new Text('No'),
-              ),
-              new FlatButton(
-                onPressed: () {Navigator.of(context).pop();
-                Navigator.of(context).pop();} ,
-                child: new Text('Yes'),
-              ),
-            ],
-          ),
-        )) ??
-        false;
+              },
+              child: new Text('Yes'),
+            ),
+          ],
+        ),
+      ));
+    }else
+      Navigator.of(context).pop();
+    return false;
   }
 
   final titleController = TextEditingController();
   final noteController = TextEditingController();
 
   final GlobalKey<ScaffoldState> _scaffoldKey = new GlobalKey<ScaffoldState>();
+
   void _showMessageInScaffold(String message) {
     _scaffoldKey.currentState.showSnackBar(SnackBar(
       content: Text(message),
     ));
   }
 
-  @override
-  void dispose() {
-    titleController.dispose();
-    noteController.dispose();
-    super.dispose();
-  }
 
-  void back() {
-    if (noteController.text.isNotEmpty || titleController.text.isNotEmpty) {
-      _onWillPop();
-      return;
-    }
-    Navigator.of(this.context).pop();
-  }
 
-  void _saveNote() async {
-    if (noteController.text.isEmpty) {
+
+
+
+  void _saveNote(BuildContext context) async {
+    if (noteController.text.isEmpty && titleController.text.isEmpty) {
       _showMessageInScaffold("There in nothing to save.");
       return;
     }
+    Note note =
+    new Note(title: titleController.text, info: noteController.text);
+    note.save();
+    note.date=note.getCurrentDate();
 
-    var now = new DateTime.now();
-    var formatter = new DateFormat('MMM dd,yyyy');
-    String formattedDate = formatter.format(now);
+    var notesList = Provider.of<NotesListProvider>(context, listen: false);
+    notesList.addNote(note);
 
-    final dbHelper = DatabaseHelper.instance;
-    Map<String, dynamic> row = {
-      DatabaseHelper.columnTitle: titleController.text,
-      DatabaseHelper.columnInfo: noteController.text,
-      DatabaseHelper.columnDate: formattedDate,
-    };
-    Note note = Note.fromMap(row);
-    await dbHelper.insert(note);
-    Navigator.of(this.context).pop(true);
+    Navigator.of(context).pop(true);
   }
+
+
+
 
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
-      onWillPop: _onWillPop,
+      onWillPop:()=> _onWillPop(context),
       child: Scaffold(
         key: _scaffoldKey,
         backgroundColor: Color(0xFF252525),
@@ -96,17 +86,23 @@ class CreateState extends State<Create> {
             children: [
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   NotesButton(
-                      callback: back, icon: Icons.arrow_back_ios_outlined),
+                      callback:() => _onWillPop(context),
+                      icon: Icons.arrow_back_ios_outlined),
                   RaisedButton(
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10)),
-                    child: new Text("Save"),
-                    padding: EdgeInsets.all(16),
+                    child: new Text(
+                      "Save",
+                      style: TextStyle(fontSize: 17),
+                    ),
+                    padding: EdgeInsets.only(
+                        top: 15, left: 15, bottom: 13, right: 15),
                     textColor: Colors.white,
                     color: Color(0xFF3B3B3B),
-                    onPressed: () => _saveNote(),
+                    onPressed: () => _saveNote(context),
                   )
                 ],
               ),

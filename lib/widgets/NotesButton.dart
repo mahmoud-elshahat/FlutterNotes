@@ -2,10 +2,10 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 class NotesButton extends StatelessWidget {
-  final Function callback;
+  final Function() callback;
   final IconData icon;
 
-  const NotesButton({Key key, this.callback, this.icon}) : super(key: key);
+   const NotesButton({Key key, this.callback, this.icon}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {

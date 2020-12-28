@@ -1,43 +1,47 @@
 import 'package:flutter/material.dart';
+import 'package:notes/models/CheckedListProvider.dart';
 import 'package:notes/models/Note.dart';
+import 'package:notes/models/NotesListProvider.dart';
 import 'package:notes/screens/Details.dart';
 import 'package:intl/intl.dart' as intl;
+import 'package:provider/provider.dart';
 
-bool inCheckingState = false;
-List<Note> checkedNotes = List<Note>();
 
 typedef NotesCallback = void Function(bool val);
 
 class GridItem extends StatefulWidget {
   final Note note;
   final int color;
-  final NotesCallback getAllNotes;
 
-  GridItem(this.note, this.color, this.getAllNotes);
+  GridItem(this.note, this.color);
 
   @override
   State<StatefulWidget> createState() {
-    return GridItemState(note, color, getAllNotes);
+    return GridItemState(note, color);
   }
 }
+
 
 class GridItemState extends State<GridItem> {
   final Note note;
   final int color;
-  final NotesCallback getAllNotes;
 
   bool isVisible = true;
   double _height = 5;
   var _maxLines = 4;
 
-  GridItemState(this.note, this.color, this.getAllNotes);
+  GridItemState(this.note, this.color);
 
   var crossAxis = CrossAxisAlignment.start;
   var isArabic = false;
+  var notesListModel ;
+  var checkedListModel;
 
   @override
   void initState() {
     super.initState();
+    notesListModel= Provider.of<NotesListProvider>(context, listen: false);
+    checkedListModel= Provider.of<CheckedListProvider>(context, listen: false);
     if (note.title.isEmpty) {
       isVisible = false;
       _height = 0;
@@ -57,16 +61,12 @@ class GridItemState extends State<GridItem> {
   }
 
   void viewSelectableItems(Note note) {
-    if (getAllNotes == null) return;
-
-    setState(() {
-      inCheckingState = true;
-      if (checkedNotes.contains(note))
-        checkedNotes.remove(note);
-      else
-        checkedNotes.add(note);
-      getAllNotes(true);
-    });
+    if (notesListModel.list == null) return;
+    checkedListModel.inCheckingState = true;
+    if (checkedListModel.checkedNotes.contains(note))
+      checkedListModel.removeCheckedItem(note);
+    else
+      checkedListModel.addCheckedItem(note);
   }
 
   @override
@@ -91,28 +91,34 @@ class GridItemState extends State<GridItem> {
                     Flexible(
                       child: Visibility(
                         child: Align(
-                          child: Text(
-                            note.title,
-                            overflow: TextOverflow.ellipsis,
-                            maxLines: 1,
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF252525),
+                            child: Text(
+                              note.title,
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF252525),
+                              ),
+                              textDirection:
+                              isArabic ? TextDirection.rtl : TextDirection.ltr,
                             ),
-                            textDirection:
-                                isArabic ? TextDirection.rtl : TextDirection.ltr,
-                          ),
-                          alignment: isArabic ? Alignment.topRight: Alignment.topLeft
+                            alignment: isArabic ? Alignment.topRight: Alignment.topLeft
                         ),
                         visible: isVisible,
                       ),
                     ),
-                    if (checkedNotes.contains(note))
-                      Icon(Icons.check_box_rounded, color: Color(0xff252525)),
-                    if (inCheckingState && !checkedNotes.contains(note))
-                      Icon(Icons.check_box_outline_blank_sharp,
-                          color: Color(0xff252525))
+
+                    Consumer<CheckedListProvider>(builder: (context,model,child){
+                      if (checkedListModel.checkedNotes.contains(note))
+                        return Icon(Icons.check_box_rounded, color: Color(0xff252525));
+
+                      if (checkedListModel.inCheckingState && !checkedListModel.checkedNotes.contains(note))
+                        return Icon(Icons.check_box_outline_blank_sharp,
+                            color: Color(0xff252525));
+                      return Center();
+                    })
+
                   ],
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 ),
@@ -128,7 +134,7 @@ class GridItemState extends State<GridItem> {
                     color: Color(0xFF252525),
                   ),
                   textDirection:
-                      isArabic ? TextDirection.rtl : TextDirection.ltr,
+                  isArabic ? TextDirection.rtl : TextDirection.ltr,
                 ),
                 Spacer(),
                 Align(
@@ -147,23 +153,17 @@ class GridItemState extends State<GridItem> {
   }
 
   void _openItemDetails() {
-    if (getAllNotes != null) {
-      if (inCheckingState) {
-        if (checkedNotes.contains(note))
-          checkedNotes.remove(note);
+    if (notesListModel.list != null) {
+      if (checkedListModel.inCheckingState) {
+        if (checkedListModel.checkedNotes.contains(note))
+          checkedListModel.removeCheckedItem(note);
         else
-          checkedNotes.add(note);
-        getAllNotes(true);
+          checkedListModel.addCheckedItem(note);
         return;
       }
     }
 
     Navigator.of(context)
-        .push(MaterialPageRoute(builder: (context) => Details(note: note)))
-        .then((value) => value ? refreshPage() : print("No changes!"));
-  }
-
-  void refreshPage() {
-    getAllNotes(false);
+        .push(MaterialPageRoute(builder: (context) => Details(note: note)));
   }
 }

@@ -1,69 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:notes/models/Note.dart';
+import 'package:notes/models/SearchedNotesListProvider.dart';
+import 'package:notes/widgets/ColorPicker.dart';
 import 'package:notes/widgets/CustomGridDelegate.dart';
 import 'package:notes/widgets/CustomInputText.dart';
 import 'package:notes/widgets/GridItem.dart';
+import 'package:provider/provider.dart';
 
-class Search extends StatefulWidget {
+class Search extends StatelessWidget {
   final List<Note> notes;
+  final searchController = new TextEditingController();
   final int itemColor;
 
-  const Search({Key key, this.notes, this.itemColor}) : super(key: key);
-
-  @override
-  State<StatefulWidget> createState() {
-    return SearchState();
-  }
-}
-
-class SearchState extends State<Search> {
-  List<Note> resultNotes = new List<Note>();
-  final searchController = new TextEditingController();
-  String tempText = "Results will be here.";
-
-  @override
-  void dispose() {
-    searchController.dispose();
-    super.dispose();
-  }
-
-  @override
-  void initState() {
-    searchController.addListener(_viewResult);
-  }
-
-  void _viewResult() {
-    if (widget.notes == null || widget.notes.length == 0) {
-      setState(() {
-        tempText = "There is nothing to search in.";
-      });
-      return;
-    }
-    setState(() {
-      resultNotes = new List<Note>();
-    });
-
-    String text = searchController.text.toLowerCase();
-    if (text == "" || text == " ") return;
-
-    for (int i = 0; i < widget.notes.length; i++) {
-      String mainText = widget.notes[i].title + " " + widget.notes[i].info;
-      mainText = mainText.toLowerCase();
-
-      if (mainText.indexOf(text) != -1) {
-        if (!resultNotes.contains(widget.notes[i])){
-          setState(() {
-            resultNotes.add(widget.notes[i]);
-          });
-        }
-
-
-      }
-    }
-  }
+  Search({Key key, this.notes, this.itemColor}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    var searchedList = Provider.of<SearchedNotesList>(context, listen: false);
+    searchController.addListener(()=> searchedList.search(notes,searchController.text));
     return new Scaffold(
         backgroundColor: Color(0xFF252525),
         body: Padding(
@@ -80,31 +34,41 @@ class SearchState extends State<Search> {
                     hintText: "Search...",
                     controller: searchController,
                     inputType: TextInputType.text),
-                resultNotes.length > 0
-                    ? Flexible(
-                        child: GridView.builder(
-                          shrinkWrap: true,
-                          itemCount: resultNotes.length,
-                          gridDelegate:
-                              SliverGridDelegateWithFixedCrossAxisCountAndFixedHeight(
-                                  crossAxisCount: 2,
-                                  crossAxisSpacing: 10,
-                                  mainAxisSpacing: 10,
-                                  height: 190),
-                          itemBuilder: (BuildContext context, int i) {
+                Consumer<SearchedNotesList>(builder: (context, model, child) {
+                  if (model.resultNotes.length > 0) {
+                    return Flexible(
+                      child: GridView.builder(
+                        key: UniqueKey(),
+                        shrinkWrap: true,
+                        itemCount: model.resultNotes.length,
+                        gridDelegate:
+                            SliverGridDelegateWithFixedCrossAxisCountAndFixedHeight(
+                                crossAxisCount: 2,
+                                crossAxisSpacing: 10,
+                                mainAxisSpacing: 10,
+                                height: 190),
+                        itemBuilder: (BuildContext context, int i) {
+
+                          if (itemColor == -1) {
                             return new GridItem(
-                                resultNotes[i], widget.itemColor, null,);
-                          },
-                        ),
-                      )
-                    : Flexible(
+                                model.resultNotes[i], colors[i % colors.length]);
+                          } else {
+                            return new GridItem(model.resultNotes[i],itemColor);
+                          }
+                        },
+                      ),
+                    );
+                  } else {
+                    return Flexible(
                         child: Center(
-                        child: Text(
-                          tempText,
-                          style: TextStyle(color: Colors.white, fontSize: 16),
-                          textAlign: TextAlign.center,
-                        ),
-                      )),
+                      child: Text(
+                        model.tempText,
+                        style: TextStyle(color: Colors.white, fontSize: 16),
+                        textAlign: TextAlign.center,
+                      ),
+                    ));
+                  }
+                })
               ],
             )));
   }
