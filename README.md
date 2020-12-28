@@ -1,6 +1,6 @@
 # Notes App
 
-Colorful notes app written in Flutter that uses sqflite for storage.
+Colorful notes app written in Flutter that uses sqflite for storage and provider for state management.
 
 ## Features
 
@@ -13,12 +13,15 @@ Colorful notes app written in Flutter that uses sqflite for storage.
 
 ## Dependencies
 
+- provider
 - auto_direction
 - sqflite
 - intl
 - modal_bottom_sheet
 - shared_preferences
 - flutter_localizations
+- wc_flutter_share
+
 
 ## Screenshots
 
