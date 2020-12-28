@@ -10,6 +10,7 @@ Colorful notes app written in Flutter that uses sqflite for storage and provider
 4. Search your notes easily.
 5. Edit note that you saved previously.
 6. Supporting both English and Arabic (RTL - LTR)
+7. ability to share note as a screenshot with app simple ui.
 
 ## Dependencies
 
